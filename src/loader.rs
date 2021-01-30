@@ -2,7 +2,9 @@
 use {
     anyhow::{
         anyhow,
+        bail,
         Result,
+        Context,
     },
     multiarray::Array2D,
     std::{
@@ -22,9 +24,21 @@ pub enum MapCell {
     Item,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
 pub enum Direction {
     N,S,E,W
+}
+
+impl Direction {
+    pub fn pointer(self) -> char {
+        use Direction::*;
+        match self {
+            N => '^',
+            S => 'v',
+            W => '<',
+            E => '>',
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -61,6 +75,7 @@ impl Debug for Map {
         for y in 0..h {
             for x in 0..w {
                 let c = match self.data[[y,x]] {
+                    _ if self.spawn.x == x && self.spawn.y == y => self.spawn.direction.pointer(),
                     MapCell::Space => '.',
                     MapCell::Item => '*',
                     MapCell::Wall => '#',
@@ -82,7 +97,7 @@ fn headers<R: BufRead>(lines: &mut Peekable<Lines<R>>) -> Result<HashMap<String,
             .ok_or(anyhow!("eof while reading headers"))?
             {
                 Ok(s) => { s },
-                Err(e) => { Err(anyhow!("io error: {}", e))? }
+                Err(e) => { bail!("io error: {}", e) }
             };
 
         match line.chars().next() {
@@ -91,7 +106,7 @@ fn headers<R: BufRead>(lines: &mut Peekable<Lines<R>>) -> Result<HashMap<String,
             _ => break,
         }
 
-        let (k,v) = line.split_at(line.find(' ').ok_or(anyhow!("incorrect header"))?);
+        let (k,v) = line.split_at(line.find(' ').ok_or(anyhow!("incorrect header line format"))?);
 
         h.insert(k.to_owned(), v.trim_start().to_owned());
 
@@ -107,7 +122,7 @@ fn load_map<R: BufRead>(lines: Peekable<Lines<R>>) -> Result<(Array2D<MapCell>, 
         .map(|i| i.map_err(|e| anyhow!("io error while reading map data {}",e)))
         .collect();
 
-    let lines = lines?;
+    let lines = lines.context("processing file header")?;
 
     let height = lines.len();
     let width = lines.iter().map(|s| s.len()).max().unwrap();
@@ -120,10 +135,10 @@ fn load_map<R: BufRead>(lines: Peekable<Lines<R>>) -> Result<(Array2D<MapCell>, 
         for (x, cell) in row.chars().enumerate() {
 
             let mut set_spawn = |d| {
-                if spawn.replace(Spawn {x,y,direction: d}).is_none() {
-                    Ok(())
-                } else {
-                    Err(anyhow!("More than one spawn point found"))
+                match spawn.replace(Spawn {x,y,direction: d}) {
+                    None => Ok(()),
+                    Some(s) =>
+                        Err(anyhow!("More than one spawn point found ({:?} and {:?})", (s.y,s.x), (y, x)))
                 }
             };
 
@@ -135,7 +150,7 @@ fn load_map<R: BufRead>(lines: Peekable<Lines<R>>) -> Result<(Array2D<MapCell>, 
                 'S' => { set_spawn(Direction::S)?; MapCell::Space }
                 'E' => { set_spawn(Direction::E)?; MapCell::Space }
                 'W' => { set_spawn(Direction::W)?; MapCell::Space }
-                other   => return Err(anyhow!("Invalid char in map: {}", other)),
+                other   => bail!("Invalid char '{:?}' at location {:?}", other, (y,x)),
             }
         }
     }
@@ -151,16 +166,16 @@ fn load_texture(_path: &str) -> Result<Texture> {
 
 fn read_rgb(s: &str) -> Result<(u8,u8,u8)> {
     let tuple: Result<Vec<u8>> = s.split(',')
-        .map(|s| s.parse().map_err(|_| anyhow!("rgb value not a u8")))
+        .map(|s| Ok(s.parse()?))
         .collect();
     let tuple = tuple?;
     if tuple.len() != 3 {
-        return Err(anyhow!("Incorrect format for RGB value"));
+        bail!("Incorrect format for RGB value");
     }
 
     Ok((tuple[0], tuple[1], tuple[2]))
-
 }
+
 
 impl Map {
 
@@ -171,10 +186,10 @@ impl Map {
         let h = headers(&mut lines)?;
 
         let resolution = {
-            let rs = h.get("R").ok_or(anyhow!("no resolution"))?;
+            let rs = h.get("R").ok_or(anyhow!("R header missing"))?;
             let xy: Vec<_> = rs.split(' ').collect();
             if xy.len() != 2 {
-                return Err(anyhow!("R line: two fields expected"));
+                return Err(anyhow!("R header: two fields expected"));
             }
             (xy[0].parse()?, xy[1].parse()?)
         };
