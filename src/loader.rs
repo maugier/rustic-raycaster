@@ -39,6 +39,16 @@ impl Direction {
             E => '>',
         }
     }
+
+    pub fn angle(self) -> f64 {
+        use Direction::*;
+        match self {
+            E => 0.0f64,
+            S => 90.0,
+            W => 180.0,
+            N => 270.0,
+        }.to_radians()
+    }
 }
 
 #[derive(Debug)]
