@@ -12,13 +12,6 @@ pub struct Render {
     height: f64
 }
 
-struct Hit {
-    x: usize,
-    y: usize,
-    d: f64,
-    dir: Direction,
-}
-
 impl Render {
     pub fn spawn(map: &Map) -> Self {
 
@@ -37,9 +30,7 @@ impl Render {
                }
     }
 
-    fn raycast(&self, map: &Map, theta: f64) -> Hit {
-        todo!()
-    }
+
 
     pub fn render(&mut self, map: &Map) {
 
