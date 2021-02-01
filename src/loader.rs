@@ -1,3 +1,5 @@
+use multiarray::MultiArray;
+
 
 use {
     anyhow::{
@@ -57,7 +59,7 @@ pub struct Spawn {
     pub x: usize,
     pub y: usize,
 }
-#[derive(Debug)]
+#[derive(Debug,Clone,Copy)]
 pub struct Texture;
 
 pub type RGB = (u8,u8,u8);
@@ -118,7 +120,7 @@ fn headers<R: BufRead>(lines: &mut Peekable<Lines<R>>) -> Result<HashMap<String,
 
         let (k,v) = line.split_at(line.find(' ').ok_or(anyhow!("incorrect header line format"))?);
 
-        h.insert(k.to_owned(), v.trim_start().to_owned());
+        h.insert(k.to_owned(), v.trim().to_owned());
 
         lines.next();
 
@@ -186,6 +188,28 @@ fn read_rgb(s: &str) -> Result<(u8,u8,u8)> {
     Ok((tuple[0], tuple[1], tuple[2]))
 }
 
+fn check_borders(data: &Array2D<MapCell>) -> Result<()> {
+
+    let (h,w) = (data.extents()[0], data.extents()[1]);
+
+    for y in &[0, h-1] {
+        for x in 0..w {
+            if data[[*y,x]] != MapCell::Wall {
+                bail!("Edge cell isn't a wall at ({},{})", y, x);
+            }
+        }
+    }
+
+    for x in &[0, w-1] {
+        for y in 0..h {
+            if data[[y,*x]] != MapCell::Wall {
+                bail!("Edge cell isn't a wall at ({},{})", y, x);
+            }
+        }
+    }
+
+    Ok(())
+}
 
 impl Map {
 
@@ -218,6 +242,9 @@ impl Map {
 
         let (data, spawn) = load_map(lines)?;
 
+        check_borders(&data)?;
+        
+
         Ok(Self {
             resolution,
             textures,
@@ -232,6 +259,46 @@ impl Map {
 #[test]
 fn test_loader() {
     let data = b"
+R 640 480
+NO north
+SO south
+WE west
+EA east
+
+S sprite
+F 220,100,0
+C 225,30,0
+
+ 111
+1101
+12N1
+1
+";
+    let m = Map::load(&data[..]);
+
+    let mut expected_data = Array2D::new([4,4], MapCell::Wall);
+
+    expected_data[[1,2]] = MapCell::Space;
+    expected_data[[2,1]] = MapCell::Item;
+    expected_data[[2,2]] = MapCell::Space;
+
+    let expected = Map {
+        resolution: (640, 480),
+        textures: [Texture; 4],
+        sprite: Texture,
+        floor: (220,100,0),
+        ceiling: (225,30,0),
+        data: expected_data,
+        spawn: Spawn { direction: Direction::N, x: 5, y: 4},
+    };
+
+    eprintln!("{:?}", m);
+    assert!(m.is_ok());
+}
+
+#[test]
+fn test_map_edge() {
+    let data = b"
 R 1024 1024
 NO nothingelse
 SO nothingtoo
@@ -242,16 +309,11 @@ S whatever
 F 220,100,0
 C 225,30,0
 
-      11111
-      10001
-11111110001
-10020020001
-10000N00001
-10001111001
-10001  1111
-11111
+111
+1N0
+111
+
 ";
     let m = Map::load(&data[..]);
-    eprintln!("{:?}", m);
-    assert!(m.is_ok());
+    assert!(m.is_err());
 }

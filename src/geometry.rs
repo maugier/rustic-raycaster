@@ -1,5 +1,11 @@
-use std::{iter::{Peekable, Rev}, ops::Range};
-use either::Either;
+use {
+    std::{
+        iter::{Peekable, Rev},
+        ops::Range
+    },
+    either::Either,
+};
+
 
 use crate::loader::Direction;
 
@@ -31,12 +37,17 @@ type Position = Vector;
 
 type DynRange = Either<Range<usize>,Rev<Range<usize>>>;
 
-#[derive(Debug)]
+/// A hit from a ray to a wall. Contains the (integer) coordinates of the 
+/// map location that was hit, a direction indicating which face was hit,
+/// the horizontal coordinate of the hit within the face (for texture rendering),
+/// and the squared distance from the camera.
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Hit {
     pub x: usize,
     pub y: usize,
     pub direction: Direction,
     pub position: f64,
+    pub distance: f64,
 }
 
 struct Interceptor {
@@ -77,15 +88,16 @@ impl Interceptor {
 }
 
 impl Iterator for Interceptor {
-    type Item = (usize,Position);
+    type Item = (usize,f64,Position);
 
-    fn next(&mut self) -> Option<(usize,Position)> {
+    fn next(&mut self) -> Option<(usize,f64,Position)> {
         self.range
             .next()
             .and_then(|xi| {
                 let x = xi as f64;
                 let y = self.p.y + (x - self.p.x) * self.slope;
-                Some((xi, Vector{x,y}))               
+                let v = Vector{x,y};
+                Some((xi, v.squared_distance(&self.p), v))               
             })
     }
 }
@@ -119,20 +131,21 @@ impl Iterator for Raycaster {
         let xhit = match (px,py) {
             (None,None) => return None,
             (Some(px), Some(py)) =>
-                { px.1.squared_distance(&self.p) <= py.1.squared_distance(&self.p.flip()) },
+                { px.1 <= py.1 },
             (Some(_),None) => true,
             (None,Some(_)) => false,
         };
 
-        let (x,y,position,direction);
+        let (x,y,position,direction, distance);
 
         
         if xhit {
-            let (xi, p) = self.xint.next().unwrap();
+            let (xi,d, p) = self.xint.next().unwrap();
             let fy = p.y.floor();
             
             y = fy as usize;
             position = p.y - fy;
+            distance = d;
             if self.d.x < 0.0 {
                 x = xi - 1; 
                 direction = Direction::E 
@@ -142,12 +155,13 @@ impl Iterator for Raycaster {
             }
             
         } else {
-            let (yi, p) = self.yint.next().unwrap();
+            let (yi,d, p) = self.yint.next().unwrap();
             let p = p.flip();
             let fx = p.x.floor();
             
             x = fx as usize;
             position = p.x - fx;
+            distance = d;
             if self.d.y < 0.0 { 
                 y = yi - 1;
                 direction = Direction::S
@@ -158,7 +172,7 @@ impl Iterator for Raycaster {
         
         }
  
-        Some(Hit {x,y,position,direction})
+        Some(Hit {x,y,position,direction,distance})
 
     }
 }
@@ -169,26 +183,33 @@ fn test_interceptor() {
     let start = v(0.5, 1.5);
     let dir = v(2.0, 1.0);
 
-    let expected = vec![
-        (1,v(1.0, 1.75)),
-        (2,v(2.0, 2.25)),
-        (3,v(3.0, 2.75)),
-        (4,v(4.0, 3.25))
-    ];
-    let computed: Vec<(usize, Vector)> = Interceptor::new(start, dir, 6).collect();
+    let computed: Vec<(usize, f64, Vector)> = Interceptor::new(start, dir, 6).collect();
 
-    assert_eq!(expected, computed);
+    let expected = vec![
+        (1,   5.0/16.0, v(1.0, 1.75)),
+        (2,  45.0/16.0, v(2.0, 2.25)),
+        (3, 125.0/16.0, v(3.0, 2.75)),
+        (4, 245.0/16.0, v(4.0, 3.25))
+    ];
+
+    assert_eq!(computed, expected);
 
 }
 
 #[test]
 fn test_raycaster() { 
+
     let middle = v(2.5, 2.5);
     let grid = Grid { height: 5, width: 5};
 
-    let r = Raycaster::new(middle ,  v(0.0, -1.0) , grid);
-    eprintln!("{:?}", r.collect::<Vec<_>>());
+    let hits: Vec<_> = Raycaster::new(middle ,  v(0.0, -1.0) , grid).take(2).collect();
+    let expected = vec![
+        Hit { x: 2, y: 1, direction: Direction::S, position: 0.5, distance: 0.25 },
+        Hit { x: 2, y: 0, direction: Direction::S, position: 0.5, distance: 2.25 },
+    ];
+
+    assert_eq!(hits, expected);
     
-    let r = Raycaster::new(v(0.1, 2.1),  v(1.0, 0.3) , grid);
-    eprintln!("{:?}", r.collect::<Vec<_>>());
+    //let r = Raycaster::new(v(0.1, 2.1),  v(1.0, 0.3) , grid);
+    //eprintln!("{:?}", r.collect::<Vec<_>>());
 }
