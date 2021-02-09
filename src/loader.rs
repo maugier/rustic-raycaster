@@ -1,6 +1,3 @@
-use multiarray::MultiArray;
-
-
 use {
     anyhow::{
         anyhow,
@@ -8,9 +5,10 @@ use {
         Result,
         Context,
     },
-    multiarray::Array2D,
+    multiarray::{MultiArray, Array2D},
     std::{
         collections::HashMap,
+        convert::TryInto,
         fmt::Debug,
         io::{
             BufRead,
@@ -18,6 +16,7 @@ use {
         },
         iter::Peekable,
     },
+    image::Rgb,
 };
 #[derive(Clone,Copy,PartialEq,PartialOrd,Eq,Ord)]
 pub enum MapCell {
@@ -53,16 +52,18 @@ impl Direction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq,Eq)]
 pub struct Spawn {
     pub direction: Direction,
     pub x: usize,
     pub y: usize,
 }
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
 pub struct Texture;
 
-pub type RGB = (u8,u8,u8);
+pub type RGB = Rgb<u8>;
+
+#[derive(PartialEq)]
 pub struct Map {
     pub resolution: (usize, usize),
     pub textures: [Texture; 4],
@@ -176,16 +177,15 @@ fn load_texture(_path: &str) -> Result<Texture> {
     Ok(Texture)
 }
 
-fn read_rgb(s: &str) -> Result<(u8,u8,u8)> {
-    let tuple: Result<Vec<u8>> = s.split(',')
+fn read_rgb(s: &str) -> Result<RGB> {
+    let pixel= s.split(',')
         .map(|s| Ok(s.parse()?))
-        .collect();
-    let tuple = tuple?;
-    if tuple.len() != 3 {
-        bail!("Incorrect format for RGB value");
-    }
+        .collect::<Result<Vec<u8>>>()?
+        .try_into()
+        .map_err(|e| anyhow!("Unreadable pixel: {:?}", e))?;
+    
 
-    Ok((tuple[0], tuple[1], tuple[2]))
+    Ok(Rgb(pixel))
 }
 
 fn check_borders(data: &Array2D<MapCell>) -> Result<()> {
@@ -286,14 +286,16 @@ C 225,30,0
         resolution: (640, 480),
         textures: [Texture; 4],
         sprite: Texture,
-        floor: (220,100,0),
-        ceiling: (225,30,0),
+        floor: Rgb([220,100,0]),
+        ceiling: Rgb([225,30,0]),
         data: expected_data,
-        spawn: Spawn { direction: Direction::N, x: 5, y: 4},
+        spawn: Spawn { direction: Direction::N, x: 2, y: 2},
     };
 
     eprintln!("{:?}", m);
-    assert!(m.is_ok());
+    assert_eq!(m.unwrap(), expected);
+
+
 }
 
 #[test]

@@ -1,7 +1,9 @@
 use {
     std::{
         iter::{Peekable, Rev},
-        ops::Range
+        ops::Range,
+        ops::Add,
+        ops::Mul
     },
     either::Either,
 };
@@ -13,13 +15,39 @@ use crate::loader::Direction;
 pub struct Vector { x: f64, y: f64 }
 
 impl Vector {
-    fn flip(&self) -> Self {
+    pub fn flip(self) -> Self {
         Vector { x: self.y, y: self.x }
     }
-    fn squared_distance(&self, rhs: &Self) -> f64 {
+
+    pub fn turn(self) -> Self {
+        Vector { x: self.y, y: -self.x}
+    }
+
+    pub fn squared_norm(self) -> f64 {
+        self.x*self.x + self.y*self.y
+    }
+
+    pub fn squared_distance(&self, rhs: &Self) -> f64 {
         let dx = rhs.x - self.x;
         let dy = rhs.y - self.y;
         dx*dx + dy*dy
+    }
+}
+
+impl Add for Vector {
+    type Output = Vector;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Vector { x: self.x + rhs.x,
+                 y: self.y + rhs.y }
+    }
+}
+
+impl Mul<f64> for Vector {
+    type Output = Vector;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Vector {x: self.x * rhs, y: self.y * rhs }
     }
 }
 
@@ -28,10 +56,17 @@ impl From<(f64,f64)> for Vector {
 }
 
 #[inline(always)]
-fn v(x: f64, y: f64) -> Vector { Vector {x,y} }
+pub fn v(x: f64, y: f64) -> Vector { Vector {x,y} }
 
 #[derive(Clone,Copy,PartialEq,Eq)]
-pub struct Grid { height: usize, width: usize }
+pub struct Grid { pub height: usize, pub width: usize }
+
+impl Grid {
+    fn contains(&self, x: usize, y: usize) -> bool {
+        (0..self.height).contains(&y) &&
+        (0..self.width).contains(&x)
+    }
+}
 
 type Position = Vector;
 
@@ -70,7 +105,7 @@ fn bounded_iterator(start: f64, direction: f64, size: usize) -> DynRange {
     if direction < 0.0 {
             Either::Right((1..ceil).rev())
     } else {
-            Either::Left(ceil .. size-1)
+            Either::Left(ceil .. size)
     }
 }
 
@@ -102,9 +137,9 @@ impl Iterator for Interceptor {
     }
 }
 
-// An iterator of all the 
+// An iterator of all the wall hits for a given position, direction and grid size
 pub struct Raycaster {
-    p: Position,
+    g: Grid,
     d: Vector,
     xint: Peekable<Interceptor>,
     yint: Peekable<Interceptor>,
@@ -113,7 +148,7 @@ pub struct Raycaster {
 impl Raycaster {
     pub fn new(p: Position, d: Vector, g: Grid)  -> Self {
         Raycaster {
-            p,d,
+            g,d,
             xint: Interceptor::new(p,d,g.width).peekable(),
             yint: Interceptor::new(p.flip(), d.flip(), g.height).peekable(),
         }
@@ -127,6 +162,8 @@ impl Iterator for Raycaster {
 
         let px = self.xint.peek();
         let py = self.yint.peek();
+
+        eprintln!("px = {:?}, py = {:?}", px, py);
 
         let xhit = match (px,py) {
             (None,None) => return None,
@@ -171,6 +208,10 @@ impl Iterator for Raycaster {
             };
         
         }
+
+        if !self.g.contains(x,y) || distance.is_infinite() {
+            return None;
+        }
  
         Some(Hit {x,y,position,direction,distance})
 
@@ -210,6 +251,16 @@ fn test_raycaster() {
 
     assert_eq!(hits, expected);
     
-    //let r = Raycaster::new(v(0.1, 2.1),  v(1.0, 0.3) , grid);
-    //eprintln!("{:?}", r.collect::<Vec<_>>());
+    let hits: Vec<_> = Raycaster::new(v(0.5, 1.5) ,  v(2.0, 1.0) , grid).collect();
+    let expected = vec![
+        Hit { x: 1, y: 1, direction: Direction::W, position: 0.75, distance: 5.0/16.0 },
+        Hit { x: 1, y: 2, direction: Direction::N, position: 0.5, distance: 5.0/4.0 },
+        Hit { x: 2, y: 2, direction: Direction::W, position: 0.25, distance: 45.0/16.0 },
+        Hit { x: 3, y: 2, direction: Direction::W, position: 0.75, distance: 125.0/16.0 },
+        Hit { x: 3, y: 3, direction: Direction::N, position: 0.5, distance: 45.0/4.0 },
+    ];
+
+    assert_eq!(hits, expected);
+    assert!(false);
+
 }
