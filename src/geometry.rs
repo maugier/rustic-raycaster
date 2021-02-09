@@ -23,6 +23,10 @@ impl Vector {
         Vector { x: self.y, y: -self.x}
     }
 
+    pub fn angle(theta: f64) -> Self {
+        Vector { x: theta.cos(), y: theta.sin() }
+    }
+
     pub fn squared_norm(self) -> f64 {
         self.x*self.x + self.y*self.y
     }
@@ -163,7 +167,7 @@ impl Iterator for Raycaster {
         let px = self.xint.peek();
         let py = self.yint.peek();
 
-        eprintln!("px = {:?}, py = {:?}", px, py);
+        //eprintln!("px = {:?}, py = {:?}", px, py);
 
         let xhit = match (px,py) {
             (None,None) => return None,

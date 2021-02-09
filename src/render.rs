@@ -1,18 +1,21 @@
+use std::{fs::File, io::BufReader};
+
 use crate::{geometry::{Grid, Raycaster}, loader::{Direction, Map, MapCell}};
 use crate::geometry::{Vector, v};
-use image::{ImageBuffer, RgbaImage, Rgb};
+use image::{ImageBuffer, RgbImage, Rgb};
 
 
 pub struct Render {
-    pos: Vector,
-    cam: Vector,
+    pub pos: Vector,
+    pub cam: Vector,
     fov: f64,
-    buffer: RgbaImage, 
+    pub buffer: RgbImage, 
     vfov: f64,
     height: f64
 }
 
 impl Render {
+
     pub fn spawn(map: &Map) -> Self {
 
         let fov = 30f64.to_radians();
@@ -21,7 +24,7 @@ impl Render {
 
         Render { pos: v(map.spawn.x as f64 + 0.5,
                         map.spawn.y as f64 + 0.5)
-               , cam: v(theta.cos(), theta.sin())
+               , cam: Vector::angle(theta)
                , fov
                , vfov: (fov.sin() * (res.1 as f64) / (res.0 as f64)).asin()
                , buffer: ImageBuffer::new(res.0 as u32, res.1 as u32)
@@ -48,18 +51,32 @@ impl Render {
                 .filter(|h| map.data[[h.y, h.x]] == MapCell::Wall)
                 .next().expect("Oh no! the impossible happened, no ray hits!");
             
-            let ceil: usize = todo!();
-            let floor: usize = todo!();
+            let vss = hit.distance.sqrt() * self.vfov.tan();
 
-            for y in 0..self.buffer.height() {
-                let pixel = todo!();
-                self.buffer.put_pixel(x, y, pixel);
+            let ceil: u32 = (half_height * (1.0 - (1.0 - self.height) / vss)).floor() as u32;
+            let floor: u32 = (half_height * (1.0 + self.height / vss)).floor() as u32;
+
+            for y in 0..ceil {
+                self.buffer.put_pixel(x, y, map.ceiling);
             }
 
+            //TODO actual texturing
+            let pixel = match hit.direction {
+                Direction::N => Rgb([0,0,255]),
+                Direction::S => Rgb([255,255,0]),
+                Direction::E => Rgb([0,255,0]),
+                Direction::W => Rgb([255,0,0]),
+            };
+
+            for y in ceil..floor {
+                self.buffer.put_pixel(x, y, pixel);
+            }
+            for y in floor..self.buffer.height() {
+                self.buffer.put_pixel(x, y, map.floor);
+            }
 
         }
 
     }
 
 }
-
