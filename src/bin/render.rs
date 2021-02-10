@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     let t1 = Instant::now();
 
     let mut r = Render::spawn(&map);
-    r.cam = Vector::angle(265.0f64.to_radians());
+    //r.cam = Vector::angle(265.0f64.to_radians());
     r.render(&map);
     let t2 = Instant::now();
 
