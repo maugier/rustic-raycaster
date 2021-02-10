@@ -14,6 +14,17 @@ pub struct Render {
     height: f64
 }
 
+
+fn clip(x: f64, bound: u32) -> u32 {
+    if x < 0.0 {
+        0
+    } else if x >= (bound as f64) {
+        bound-1
+    } else {
+        x.floor() as u32
+    }
+}
+
 impl Render {
 
     pub fn spawn(map: &Map) -> Self {
@@ -32,14 +43,13 @@ impl Render {
                }
     }
 
-
-
     pub fn render(&mut self, map: &Map) {
 
         let grid_bounds = map.data.extents();
         let grid = Grid { width: grid_bounds[1], height: grid_bounds[0] };
+        let screen_height = self.buffer.height();
         let half_width: f64 = (self.buffer.width() as f64) / 2.0;
-        let half_height: f64 = (self.buffer.height() as f64) / 2.0;
+        let half_height: f64 = (screen_height as f64) / 2.0;
         let dx: Vector = self.cam.turn() * (self.fov.sin() / half_width);
 
 
@@ -53,8 +63,8 @@ impl Render {
             
             let vss = hit.distance.sqrt() * self.vfov.tan();
 
-            let ceil: u32 = (half_height * (1.0 - (1.0 - self.height) / vss)).floor() as u32;
-            let floor: u32 = (half_height * (1.0 + self.height / vss)).floor() as u32;
+            let ceil: u32 = clip(half_height * (1.0 - (1.0 - self.height) / vss), screen_height);
+            let floor: u32 = clip(half_height * (1.0 + self.height / vss), screen_height);
 
             for y in 0..ceil {
                 self.buffer.put_pixel(x, y, map.ceiling);
@@ -71,6 +81,7 @@ impl Render {
             for y in ceil..floor {
                 self.buffer.put_pixel(x, y, pixel);
             }
+
             for y in floor..self.buffer.height() {
                 self.buffer.put_pixel(x, y, map.floor);
             }
