@@ -20,7 +20,7 @@ impl Vector {
     }
 
     pub fn turn(self) -> Self {
-        Vector { x: self.y, y: -self.x}
+        Vector { x: -self.y, y: self.x}
     }
 
     pub fn angle(theta: f64) -> Self {
