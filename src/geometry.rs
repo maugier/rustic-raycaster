@@ -234,7 +234,8 @@ fn test_interceptor() {
         (1,   5.0/16.0, v(1.0, 1.75)),
         (2,  45.0/16.0, v(2.0, 2.25)),
         (3, 125.0/16.0, v(3.0, 2.75)),
-        (4, 245.0/16.0, v(4.0, 3.25))
+        (4, 245.0/16.0, v(4.0, 3.25)),
+        (5, 405.0/16.0, v(5.0, 3.75)),
     ];
 
     assert_eq!(computed, expected);
@@ -262,9 +263,9 @@ fn test_raycaster() {
         Hit { x: 2, y: 2, direction: Direction::W, position: 0.25, distance: 45.0/16.0 },
         Hit { x: 3, y: 2, direction: Direction::W, position: 0.75, distance: 125.0/16.0 },
         Hit { x: 3, y: 3, direction: Direction::N, position: 0.5, distance: 45.0/4.0 },
+        Hit { x: 4, y: 3, direction: Direction::W, position: 0.25, distance: 245.0/16.0 }
     ];
 
     assert_eq!(hits, expected);
-    assert!(false);
 
 }

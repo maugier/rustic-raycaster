@@ -1,3 +1,5 @@
+use crate::texture::Texture;
+
 use {
     anyhow::{
         anyhow,
@@ -58,12 +60,9 @@ pub struct Spawn {
     pub x: usize,
     pub y: usize,
 }
-#[derive(Debug,Clone,Copy,PartialEq,Eq)]
-pub struct Texture;
 
 pub type RGB = Rgb<u8>;
 
-#[derive(PartialEq)]
 pub struct Map {
     pub resolution: (usize, usize),
     pub textures: [Texture; 4],
@@ -72,6 +71,17 @@ pub struct Map {
     pub ceiling: RGB,
     pub data: Array2D<MapCell>,
     pub spawn: Spawn,
+}
+
+impl Map {
+    pub fn texture(&self, d: Direction) -> &Texture {
+        match d {
+            Direction::N => &self.textures[0],
+            Direction::S => &self.textures[1],
+            Direction::W => &self.textures[2],
+            Direction::E => &self.textures[3],
+        }
+    }
 }
 
 impl Debug for Map {
@@ -173,10 +183,6 @@ fn load_map<R: BufRead>(lines: Peekable<Lines<R>>) -> Result<(Array2D<MapCell>, 
     Ok((data, spawn))
 }
 
-fn load_texture(_path: &str) -> Result<Texture> {
-    Ok(Texture)
-}
-
 fn read_rgb(s: &str) -> Result<RGB> {
     let pixel= s.split(',')
         .map(|s| Ok(s.parse()?))
@@ -229,13 +235,13 @@ impl Map {
         };
 
         let textures = [
-            load_texture(h.get("NO").ok_or(anyhow!("NO texture missing"))?)?,
-            load_texture(h.get("SO").ok_or(anyhow!("SO texture missing"))?)?,
-            load_texture(h.get("WE").ok_or(anyhow!("WE texture missing"))?)?,
-            load_texture(h.get("EA").ok_or(anyhow!("EA texture missing"))?)?,
+            Texture::load(h.get("NO").ok_or(anyhow!("NO texture missing"))?).context("loading NO texture")?,
+            Texture::load(h.get("SO").ok_or(anyhow!("SO texture missing"))?).context("loading SO texture")?,
+            Texture::load(h.get("WE").ok_or(anyhow!("WE texture missing"))?).context("loading WE texture")?,
+            Texture::load(h.get("EA").ok_or(anyhow!("EA texture missing"))?).context("loading EA texture")?,
         ];
 
-        let sprite = load_texture(h.get("S").ok_or(anyhow!("S texture missing"))?)?;
+        let sprite = Texture::load(h.get("S").ok_or(anyhow!("S texture missing"))?)?;
 
         let floor = read_rgb(h.get("F").ok_or(anyhow!("no floor color"))?)?;
         let ceiling = read_rgb(h.get("C").ok_or(anyhow!("no ceiling color"))?)?;
@@ -260,12 +266,12 @@ impl Map {
 fn test_loader() {
     let data = b"
 R 640 480
-NO north
-SO south
-WE west
-EA east
+NO tex/north.png
+SO tex/south.png
+WE tex/west.png
+EA tex/east.png
 
-S sprite
+S tex/sprite.png
 F 220,100,0
 C 225,30,0
 
@@ -274,7 +280,7 @@ C 225,30,0
 12N1
 1
 ";
-    let m = Map::load(&data[..]);
+    let m = Map::load(&data[..]).unwrap();
 
     let mut expected_data = Array2D::new([4,4], MapCell::Wall);
 
@@ -282,18 +288,11 @@ C 225,30,0
     expected_data[[2,1]] = MapCell::Item;
     expected_data[[2,2]] = MapCell::Space;
 
-    let expected = Map {
-        resolution: (640, 480),
-        textures: [Texture; 4],
-        sprite: Texture,
-        floor: Rgb([220,100,0]),
-        ceiling: Rgb([225,30,0]),
-        data: expected_data,
-        spawn: Spawn { direction: Direction::N, x: 2, y: 2},
-    };
-
-    eprintln!("{:?}", m);
-    assert_eq!(m.unwrap(), expected);
+    assert_eq!(m.resolution, (640, 480));
+    assert_eq!(m.floor, Rgb([220, 100, 0]));
+    assert_eq!(m.ceiling, Rgb([225, 30, 0]));
+    assert_eq!(m.spawn, Spawn { direction: Direction::N, x: 2, y: 2});
+    assert!(m.data == expected_data);
 
 
 }
@@ -302,12 +301,12 @@ C 225,30,0
 fn test_map_edge() {
     let data = b"
 R 1024 1024
-NO nothingelse
-SO nothingtoo
-WE lksjldsf
-EA lksjdflkasjfd
+NO tex/north.png
+SO tex/south.png
+WE tex/west.png
+EA tex/east.png
 
-S whatever
+S tex/sprite.png
 F 220,100,0
 C 225,30,0
 

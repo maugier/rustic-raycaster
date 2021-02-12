@@ -69,16 +69,12 @@ impl Render {
             for y in 0..ceil {
                 self.buffer.put_pixel(x, y, map.ceiling);
             }
-
-            //TODO actual texturing
-            let pixel = match hit.direction {
-                Direction::N => Rgb([0,0,255]),
-                Direction::S => Rgb([255,255,0]),
-                Direction::E => Rgb([0,255,0]),
-                Direction::W => Rgb([255,0,0]),
-            };
+            
+            let tex = map.texture(hit.direction);
+            let tdy = 1.0 / ((floor - ceil) as f64);
 
             for y in ceil..floor {
+                let pixel = tex.get((hit.position, (y - ceil) as f64 * tdy));
                 self.buffer.put_pixel(x, y, pixel);
             }
 
