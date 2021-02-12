@@ -74,7 +74,12 @@ impl Render {
             let tdy = 1.0 / ((floor - ceil) as f64);
 
             for y in ceil..floor {
-                let pixel = tex.get((hit.position, (y - ceil) as f64 * tdy));
+                let ty = (y - ceil) as f64 * tdy;
+                let tx = match hit.direction {
+                    Direction::S | Direction::W => hit.position,
+                    Direction::N | Direction::E => 1.0 - hit.position
+                };
+                let pixel = tex.get((tx, ty));
                 self.buffer.put_pixel(x, y, pixel);
             }
 
